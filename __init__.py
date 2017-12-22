@@ -240,17 +240,20 @@ def run(cs, store=False):
             break
 
 
-def tick_chillstepper(cs, dry_run=False):
+def tick_chillstepper(cs, dry_run=False, backoff=True):
 
     try:
         last_funcname = cs.get_attr('_last', None)
         funcname = cs.get_attr('_next')
-        print '@{} {}  ( {} )'.format(cs.__class__.__name__, cs.pk, last_funcname)
+        print '@{} {} [ {} ] ( {} )'.format(cs.__class__.__name__, cs.uuid, cs.pk, last_funcname)
         if cs.get_attr(PAUSE_ATTRIBUTE_KEY, False):
             print "    is paused"
             return
-        backoff_counter = cs.get_attr('backoff_counter', 0)
-        if backoff_counter > 0:
+        try:
+            backoff_counter = cs.get_attr('backoff_counter', 0)
+        except AttributeError:
+            backoff_counter = 0
+        if backoff and backoff_counter > 0:
             print "    Backoff counter is {}".format(backoff_counter)
             if np.random.random() < 0.5**backoff_counter:
                 print "    I will try to rerun"
@@ -268,7 +271,6 @@ def tick_chillstepper(cs, dry_run=False):
                 cs._set_state(calc_states.FINISHED)
             else:
                 print "   Reaching next step ( {} )".format(funcname)
-
                 returned = getattr(cs, funcname)()
                 if returned is None:
                     return False
@@ -286,27 +288,30 @@ def tick_chillstepper(cs, dry_run=False):
                             print "      Adding {} as called ( {} )".format(v, k)
                         else:
                             raise Exception("Unspecified type {}".format(type(v)))
+
     except Exception as e:
         trcback = str(traceback.format_exc())
         msg = "ERROR ! This Chillstepper got an error for {} in the {} method, we report down the stack trace:\n{}".format(
                 cs, funcname, trcback)
-        print msg
+        print trcback
         if dry_run:
-            raise e
+            raise
         cs._set_state(calc_states.FAILED)
         cs._set_attr('fail_hash', make_hash(trcback))
+        cs._set_attr('fail_msg', msg)
         cs.add_comment(trcback, user=get_automatic_user())
 
 
 
-def tick_all(dry_run=False, pk=None):
+def tick_all(dry_run=False, pk=None, backoff=True):
     qb = QueryBuilder()
     qb.append(ChillstepCalculation,tag='c', filters={'state':calc_states.WITHSCHEDULER})
-    if pk:
+    if isinstance(pk, int):
         qb.add_filter('c', {'id':pk})
-    print 12,qb.count()
+    elif isinstance(pk, (list, tuple)):
+        qb.add_filter('c', {'id':{'in':pk}})
     for chillstepcalc, in qb.all():
-        tick_chillstepper(chillstepcalc, dry_run=dry_run)
+        tick_chillstepper(chillstepcalc, dry_run=dry_run, backoff=backoff)
 
 
 

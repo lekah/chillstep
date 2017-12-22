@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import argparse
+from aiida.backends.utils import load_dbenv, is_dbenv_loaded
+from aiida.cmdline import delayed_load_node as load_node
+from aiida.cmdline.baseclass import VerdiCommandWithSubcommands
+
+
+def chillstep_list(*args):
+    """
+    Return a list of calculations on screen.
+    """
+
+    if not is_dbenv_loaded():
+        load_dbenv()
+    import datetime
+
+
+    from aiida.orm.querybuilder import QueryBuilder
+    from aiida.orm.calculation.chillstep import ChillstepCalculation
+    from aiida.common.datastructures import calc_states
+    parser = argparse.ArgumentParser(
+        description='List chillstep calculations.')
+
+    parser.add_argument('-s', '--states', nargs='+', type=str,
+                        help="show only the AiiDA calculations with given state",
+                        default=[calc_states.WITHSCHEDULER])
+
+    parser.add_argument('-p', '--past-days', metavar='N',
+                        help="add a filter to show only calculations created in the past N days",
+                        action='store', type=int)
+    parser.add_argument('pks', type=int, nargs='*',
+                        help="a list of calculations to show. If empty, all running calculations are shown. If non-empty, ignores the -p and -r options.")
+    parser.add_argument('-a', '--all-states',
+                        dest='all_states', action='store_true',
+                        help="Overwrite manual set of states if present, and look for calculations in every possible state")
+    parser.add_argument('-t', '--type', help='a substring of the the plugin-type-string')
+    parser.set_defaults(all_states=False)
+
+    parsed_args = parser.parse_args(args)
+
+    qb = QueryBuilder()
+    qb.append(ChillstepCalculation, tag='calc')
+    if parsed_args.pks:
+        qb.add_filter('calc',{'id':{'in':parsed_args.pks}})
+    else:
+        if parsed_args.all_states:
+            pass
+        else:
+            qb.add_filter('calc', {'state':{'in':parsed_args.states}})
+        if parsed_args.past_days:
+            qb.add_filter('calc', {'ctime':{'>':datetime.datetime.now()-datetime.timedelta(days=parsed_args.past_days)}})
+    if parsed_args.type:
+        qb.add_filter('calc', {'type':{'like':'calculation.chillstep.%{}%'.format(parsed_args.type)}})
+    #~ print qb._filters
+    #~ return
+    qb.order_by({'calc':'id'})
+
+    res = qb.all()
+    
+    for chiller, in res:
+        print chiller.id, chiller.ctime.isoformat(),chiller.get_state(), chiller.__class__.__name__,  chiller.label, chiller.get_attr('_last'), chiller.get_attr('_next')
+
+
+
+if __name__ == '__main__':
+    if sys.argv[1] == 'list':
+        chillstep_list(*sys.argv[2:])
+    else:
+        raise Exception()
