@@ -216,6 +216,7 @@ class ChillstepCalculation(Calculation):
         return super(Calculation, self)._linking_as_output(dest, link_type)
 
     def pause(self):
+        assert self.get_state() == calc_states.WITHSCHEDULER, "Can only pause calculations that are in WITHSCHEDULER state"
         to_pause = self.get_running_slaves() + [self]
         for cs in to_pause:
             prev_state = cs.get_state()
@@ -224,6 +225,17 @@ class ChillstepCalculation(Calculation):
             else:
                 print "   Pausing", cs, "(previous state was {})".format(prev_state)
                 cs._set_attr(PAUSE_ATTRIBUTE_KEY, True)
+
+    def unpause(self):
+        # assert self.get_state() == calc_states.WITHSCHEDULER, "Can only pause calculations that are in WITHSCHEDULER state"
+        to_unpause = self.get_running_slaves() + [self]
+        for cs in to_unpause:
+            prev_state = cs.get_state()
+            if prev_state == PAUSED_STATE:
+                cs._set_attr(PAUSE_ATTRIBUTE_KEY, False)
+            else:
+                print "   Pausing", cs, "(previous state was {})".format(prev_state)
+                
 
     def get_running_slaves(self, projections=['*']):
         return [_ for _,  in QueryBuilder().append(

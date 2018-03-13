@@ -59,14 +59,59 @@ def chillstep_list(*args):
     qb.order_by({'calc':'id'})
 
     res = qb.all()
-    
+
     for chiller, in res:
         print chiller.id, chiller.ctime.isoformat(),chiller.get_state(), chiller.__class__.__name__,  chiller.label, chiller.get_attr('_last'), chiller.get_attr('_next')
 
 
+def chillstep_pause(*args):
+    if not is_dbenv_loaded():
+        load_dbenv()
+    from aiida.orm.querybuilder import QueryBuilder
+    from aiida.orm.calculation.chillstep import ChillstepCalculation
+    from aiida.common.datastructures import calc_states
+    parser = argparse.ArgumentParser(
+        description='Pause chillstep calculations.')
+
+    parser.add_argument('pks', type=int, nargs='*',
+                        help="a list of calculations to pause")
+
+
+    parsed_args = parser.parse_args(args)
+
+
+    for cs, in QueryBuilder().append(ChillstepCalculation, filters={'id':{'in':parsed_args.pks}}).all():
+        cs.pause()
+
+def chillstep_unpause(*args):
+    if not is_dbenv_loaded():
+        load_dbenv()
+    from aiida.orm.querybuilder import QueryBuilder
+    from aiida.orm.calculation.chillstep import ChillstepCalculation
+    from aiida.common.datastructures import calc_states
+    parser = argparse.ArgumentParser(
+        description='Pause chillstep calculations.')
+
+    parser.add_argument('pks', type=int, nargs='*',
+                        help="a list of calculations to pause")
+
+
+    parsed_args = parser.parse_args(args)
+
+
+    for cs, in QueryBuilder().append(ChillstepCalculation, filters={'id':{'in':parsed_args.pks}}).all():
+        cs.unpause()
+
+
+
 
 if __name__ == '__main__':
-    if sys.argv[1] == 'list':
+    first_arg = sys.argv[1]
+    if first_arg == 'list':
         chillstep_list(*sys.argv[2:])
+    elif first_arg == 'pause':
+        chillstep_pause(*sys.argv[2:])
+    elif first_arg == 'unpause':
+        chillstep_unpause(*sys.argv[2:])
     else:
         raise Exception()
